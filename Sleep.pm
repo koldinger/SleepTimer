@@ -37,12 +37,14 @@ package Plugins::Sleep;
 
 use Slim::Utils::Strings qw (string);
 use Slim::Utils::Misc;
+use Time::HiRes;
 
 use vars qw($VERSION);
-$VERSION = '0.0.3';
+$VERSION = '0.0.4';
 
 my %sleepTimers   	= ();
 my %sleepLengths  	= ();
+my %sleepTimes  	= ();
 my $timeDefault		= 0;
 
 sub setMode {
@@ -126,7 +128,8 @@ sub lines {
 
 sub doSleep {
 	my $client = shift;
-	$::d_plugins && msg($client->name() . ": Turning off\n");
+	my $now = time();
+	$::d_plugins && msg($client->name() . ": Now $now (Expected $sleepTimes{$client}).  Turning off.\n");
 	unsetTimer($client);
 	if ($client->isPlayer()) {
 	    $client->fade_volume(-15, \&Slim::Control::Command::turnitoff, [$client]);
@@ -135,22 +138,28 @@ sub doSleep {
 
 sub setTimer {
 	my $client = shift;
-	my $later = shift;
+	my $delay = shift;
 	unsetTimer($client);
-	$sleepLengths{$client} = $later;
-	if ($later != 0) {
-		$::d_plugins && msg($client->name . ": Setting timer for $later seconds\n");
+	$sleepLengths{$client} = $delay;
+	my $now = time();
+	my $later = $now + $delay;
+	$sleepTimes{$client} = $later;
+	if ($delay != 0) {
+		$::d_plugins && msg($client->name . ": Setting timer for $delay seconds ($now, $later)\n");
 		$sleepTimers{$client} =
-			Slim::Utils::Timers::setTimer ($client, time + $later, \&doSleep);
+			Slim::Utils::Timers::setTimer ($client, $later, \&doSleep);
+		#my $timer = $sleepTimers{$client};
+		#$::d_plugins && msg($client->name . ": Timer set.  " . $timer->{'when'} . "  " . $timer . "\n");
+		#$::d_plugins && msg($client->name . ": Timers pending: " . Slim::Utils::Timers::pendingTimers($client, \&doSleep) . "\n");
 	}
 }
 
 sub unsetTimer {
 	my $client = shift;
-	$::d_plugins && msg($client->name() . ": Unsetting timer\n");
-
-	Slim::Utils::Timers::killOneTimer ($client, $sleepTimers{$client})
-		if defined ($sleepTimers{$client});
+	if (defined $sleepTimers{$client}) {
+		$::d_plugins && msg($client->name() . ": Unsetting timer\n");
+		Slim::Utils::Timers::killSpecific ($sleepTimers{$client});
+	}
 	$sleepTimers{$client} = undef;
 	$sleepLengths{$client} = 0;
 }
@@ -168,7 +177,7 @@ sub callback {
     return if (!defined $client);
     my $command = @$args[0];
     if ($command eq "power") {
-	if ($client->power()) {
+	if (!$client->power()) {
 	    $::d_plugins && msg($client->name() . ": Power off\n");
 	    unsetTimer($client);
 	}
