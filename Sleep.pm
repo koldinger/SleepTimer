@@ -39,7 +39,7 @@ use Slim::Utils::Strings qw (string);
 use Slim::Utils::Misc;
 
 use vars qw($VERSION);
-$VERSION = '0.0.2';
+$VERSION = '0.0.3';
 
 my %sleepTimers   	= ();
 my %sleepLengths  	= ();
@@ -72,6 +72,10 @@ my %functions = (
 	'right' => sub  {
 		my $client = shift;
 
+		# Make sure there's something in the sleepLengths field.
+		$sleepLengths{$client} = 0 if (!defined $sleepLengths{$client});
+
+		# List of options
 		my @menuTimerChoices = (
 			string('PLUGIN_SLEEP_INTERVAL_1'),
 			string('PLUGIN_SLEEP_INTERVAL_2'),
@@ -81,16 +85,19 @@ my %functions = (
 			string('PLUGIN_SLEEP_INTERVAL_6'),
 		);
 
+		# Convert the options into times.
+		# Relies on the fact that the option strings are in the form
+		# xx minutes
+		# where xx is a number
 		my @menuTimerIntervals =
 			map { 60 * ($_ =~ /(\d+)/)[0] } @menuTimerChoices;
 
 		my %params = (
-			'listRef' 	=> [ 0, @menuTimerIntervals ],
+			'listRef' 	=> [ 0, 			 @menuTimerIntervals ],
 			'externRef' 	=> [ string('PLUGIN_SLEEP_OFF'), @menuTimerChoices ],
 			'header' 	=> string('PLUGIN_SLEEP'),
-			'valueRef' 	=> \ ($sleepLengths{$_[0]} || $timeDefault),
+			'valueRef' 	=> \ ($sleepLengths{$client}),
 			'onChange' 	=> sub { setTimer($_[0], $_[1])},
-			# 'onChangeArgs' => 'CV',
 		);
 		Slim::Buttons::Common::pushModeLeft($client, 'INPUT.List', \%params);
 	}
@@ -141,10 +148,11 @@ sub setTimer {
 sub unsetTimer {
 	my $client = shift;
 	$::d_plugins && msg($client->name() . ": Unsetting timer\n");
+
 	Slim::Utils::Timers::killOneTimer ($client, $sleepTimers{$client})
 		if defined ($sleepTimers{$client});
 	$sleepTimers{$client} = undef;
-	$sleepLengths{$client} = undef;
+	$sleepLengths{$client} = 0;
 }
 
 sub strings
